@@ -9,7 +9,110 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      text_regions: {
+        Row: {
+          background_color: string | null
+          color: string | null
+          confidence: number | null
+          created_at: string | null
+          edited_text: string | null
+          font_family: string | null
+          font_size: number | null
+          height: number
+          id: string
+          image_id: string | null
+          original_text: string | null
+          status: string | null
+          translated_text: string | null
+          updated_at: string | null
+          width: number
+          x: number
+          y: number
+        }
+        Insert: {
+          background_color?: string | null
+          color?: string | null
+          confidence?: number | null
+          created_at?: string | null
+          edited_text?: string | null
+          font_family?: string | null
+          font_size?: number | null
+          height: number
+          id?: string
+          image_id?: string | null
+          original_text?: string | null
+          status?: string | null
+          translated_text?: string | null
+          updated_at?: string | null
+          width: number
+          x: number
+          y: number
+        }
+        Update: {
+          background_color?: string | null
+          color?: string | null
+          confidence?: number | null
+          created_at?: string | null
+          edited_text?: string | null
+          font_family?: string | null
+          font_size?: number | null
+          height?: number
+          id?: string
+          image_id?: string | null
+          original_text?: string | null
+          status?: string | null
+          translated_text?: string | null
+          updated_at?: string | null
+          width?: number
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "text_regions_image_id_fkey"
+            columns: ["image_id"]
+            isOneToOne: false
+            referencedRelation: "user_images"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_images: {
+        Row: {
+          created_at: string | null
+          edited_url: string | null
+          file_size: number | null
+          filename: string
+          id: string
+          mime_type: string | null
+          original_url: string
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          edited_url?: string | null
+          file_size?: number | null
+          filename: string
+          id?: string
+          mime_type?: string | null
+          original_url: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          edited_url?: string | null
+          file_size?: number | null
+          filename?: string
+          id?: string
+          mime_type?: string | null
+          original_url?: string
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
