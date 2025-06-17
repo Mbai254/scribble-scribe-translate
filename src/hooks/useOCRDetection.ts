@@ -32,7 +32,7 @@ export const useOCRDetection = () => {
         logger: m => console.log(m)
       });
 
-      console.log('OCR data structure:', data);
+      console.log('OCR raw data:', data);
 
       // Access words from the correct Tesseract.js structure
       let allWords: any[] = [];
@@ -46,34 +46,41 @@ export const useOCRDetection = () => {
         );
       }
       
-      // Fallback: if no words found, create a single region from the full text
-      if (allWords.length === 0 && data.text && data.text.trim()) {
-        allWords = [{
-          text: data.text.trim(),
-          confidence: 80,
-          bbox: { x0: 0, y0: 0, x1: 100, y1: 20 }
-        }];
-      }
+      console.log('Extracted words:', allWords);
 
+      // Filter and process detected words with higher confidence threshold
       const textRegions: OCRTextRegion[] = allWords
-        .filter(word => word && word.text && word.confidence > 30)
-        .map((word, index) => ({
-          id: `ocr-${index}`,
-          text: word.text,
-          bbox: {
-            x: word.bbox?.x0 || 0,
-            y: word.bbox?.y0 || 0,
-            width: (word.bbox?.x1 || 0) - (word.bbox?.x0 || 0),
-            height: (word.bbox?.y1 || 0) - (word.bbox?.y0 || 0),
-          },
-          confidence: word.confidence / 100,
-          fontSize: Math.max(12, (word.bbox?.y1 || 20) - (word.bbox?.y0 || 0)),
-          fontFamily: 'Arial',
-          color: '#000000'
-        }));
+        .filter(word => word && word.text && word.text.trim().length > 0 && word.confidence > 50)
+        .map((word, index) => {
+          const bbox = word.bbox || { x0: 0, y0: 0, x1: 100, y1: 20 };
+          const width = Math.max(10, bbox.x1 - bbox.x0);
+          const height = Math.max(10, bbox.y1 - bbox.y0);
+          
+          return {
+            id: `ocr-${index}-${Date.now()}`,
+            text: word.text.trim(),
+            bbox: {
+              x: bbox.x0,
+              y: bbox.y0,
+              width: width,
+              height: height,
+            },
+            confidence: Math.round(word.confidence) / 100,
+            fontSize: Math.max(12, height * 0.8),
+            fontFamily: 'Arial',
+            color: '#000000'
+          };
+        });
 
+      console.log('Processed text regions:', textRegions);
       setDetectedText(textRegions);
-      toast.success(`Detected ${textRegions.length} text regions`);
+      
+      if (textRegions.length > 0) {
+        toast.success(`Detected ${textRegions.length} text elements`);
+      } else {
+        toast.warning('No text detected in image');
+      }
+      
       return textRegions;
     } catch (error) {
       console.error('Error during OCR detection:', error);

@@ -1,6 +1,6 @@
 
 import React, { useCallback, useEffect } from 'react';
-import { Upload, Download, Scan, Wand2, Move, Type } from 'lucide-react';
+import { Upload, Download, Scan, Wand2, Move, Type, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,10 +21,12 @@ const SmartImageEditor = () => {
     startElementEdit,
     updateElementContent,
     finishElementEdit,
+    deleteElement,
     startElementDrag,
     dragElement,
     finishElementDrag,
-    exportFinalImage
+    exportFinalImage,
+    resetToOriginal
   } = useEnhancedImageEditor();
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -48,8 +50,15 @@ const SmartImageEditor = () => {
     if (isDragging) return;
 
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const img = imageRef.current;
+    if (!img) return;
+
+    // Calculate scale factors for coordinate conversion
+    const scaleX = img.naturalWidth / img.clientWidth;
+    const scaleY = img.naturalHeight / img.clientHeight;
+    
+    const x = (e.clientX - rect.left) * scaleX;
+    const y = (e.clientY - rect.top) * scaleY;
 
     // Check if click is on an editable element
     const clickedElement = editableElements.find(element => 
@@ -62,26 +71,31 @@ const SmartImageEditor = () => {
     if (clickedElement) {
       if (e.detail === 2) { // Double click to edit
         startElementEdit(clickedElement.id);
-      } else { // Single click to select
+      } else { // Single click to select/drag
         startElementDrag(clickedElement.id, x, y);
       }
     }
-  }, [editableElements, isDragging, startElementEdit, startElementDrag]);
+  }, [editableElements, isDragging, startElementEdit, startElementDrag, imageRef]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (isDragging) {
+    if (isDragging && imageRef.current) {
       const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const img = imageRef.current;
+      
+      const scaleX = img.naturalWidth / img.clientWidth;
+      const scaleY = img.naturalHeight / img.clientHeight;
+      
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
       dragElement(x, y);
     }
-  }, [isDragging, dragElement]);
+  }, [isDragging, dragElement, imageRef]);
 
   const handleDownload = useCallback(async () => {
     try {
       const finalImageData = exportFinalImage();
       if (!finalImageData) {
-        toast.error('No image to download');
+        toast.error('No edited image to download');
         return;
       }
 
@@ -90,7 +104,7 @@ const SmartImageEditor = () => {
       link.href = finalImageData;
       link.click();
       
-      toast.success('Image downloaded successfully!');
+      toast.success('Edited image downloaded successfully!');
     } catch (error) {
       console.error('Error downloading image:', error);
       toast.error('Failed to download image');
@@ -138,14 +152,27 @@ const SmartImageEditor = () => {
                 </Button>
                 
                 {uploadedImage && (
-                  <Button
-                    onClick={runSmartDetection}
-                    className="w-full bg-purple-600 hover:bg-purple-700"
-                    disabled={isProcessing}
-                  >
-                    <Scan className="w-4 h-4 mr-2" />
-                    {isProcessing ? 'Analyzing...' : 'Detect Text & Objects'}
-                  </Button>
+                  <>
+                    <Button
+                      onClick={runSmartDetection}
+                      className="w-full bg-purple-600 hover:bg-purple-700"
+                      disabled={isProcessing}
+                    >
+                      <Scan className="w-4 h-4 mr-2" />
+                      {isProcessing ? 'Analyzing...' : 'Detect Text & Objects'}
+                    </Button>
+                    
+                    {editableElements.length > 0 && (
+                      <Button
+                        onClick={resetToOriginal}
+                        variant="outline"
+                        className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20"
+                      >
+                        <RotateCcw className="w-4 h-4 mr-2" />
+                        Reset to Original
+                      </Button>
+                    )}
+                  </>
                 )}
                 
                 <input
@@ -166,23 +193,23 @@ const SmartImageEditor = () => {
               <CardContent className="space-y-2 text-white/80 text-sm">
                 <div className="flex items-center gap-2">
                   <Upload className="w-4 h-4" />
-                  <span>Drag & drop or upload an image</span>
+                  <span>Upload an image with text</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Scan className="w-4 h-4" />
-                  <span>Click "Detect" to find text & objects</span>
+                  <span>Click "Detect" to find real text</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Type className="w-4 h-4" />
-                  <span>Double-click text to edit in-place</span>
+                  <span>Double-click text to edit content</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Move className="w-4 h-4" />
-                  <span>Drag elements to move them</span>
+                  <span>Drag to move text around</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Download className="w-4 h-4" />
-                  <span>Download your edited image</span>
+                  <Trash2 className="w-4 h-4" />
+                  <span>Use delete button to remove text</span>
                 </div>
               </CardContent>
             </Card>
@@ -192,7 +219,7 @@ const SmartImageEditor = () => {
               <Card className="backdrop-blur-lg bg-white/10 border-white/20 flex-1">
                 <CardHeader>
                   <CardTitle className="text-white">
-                    Detected Elements ({editableElements.length})
+                    Detected Text ({editableElements.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 max-h-60 overflow-y-auto">
@@ -204,23 +231,56 @@ const SmartImageEditor = () => {
                           ? 'bg-white/20 border-white/40'
                           : 'bg-white/5 border-white/20 hover:bg-white/10'
                       }`}
-                      onClick={() => startElementEdit(element.id)}
                     >
                       <div className="flex items-center justify-between mb-2">
-                        <Badge
-                          variant="secondary"
-                          className="bg-blue-500/20 text-blue-200"
-                        >
-                          {element.type}
-                        </Badge>
-                        {element.isEditing && (
-                          <Badge className="bg-green-500/20 text-green-200">
-                            editing
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="secondary"
+                            className="bg-blue-500/20 text-blue-200"
+                          >
+                            {element.type}
                           </Badge>
-                        )}
+                          {element.confidence && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-green-500/20 text-green-200"
+                            >
+                              {Math.round(element.confidence * 100)}%
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startElementEdit(element.id);
+                            }}
+                            className="text-white/60 hover:text-white hover:bg-white/10 h-6 w-6 p-0"
+                          >
+                            <Type className="w-3 h-3" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteElement(element.id);
+                            }}
+                            className="text-red-300 hover:text-red-200 hover:bg-red-500/10 h-6 w-6 p-0"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-white text-sm truncate">
-                        {element.content}
+                      {element.isEditing && (
+                        <Badge className="bg-orange-500/20 text-orange-200 mb-2">
+                          editing
+                        </Badge>
+                      )}
+                      <p className="text-white text-sm font-mono bg-black/20 p-2 rounded">
+                        "{element.content}"
                       </p>
                     </div>
                   ))}
@@ -235,10 +295,10 @@ const SmartImageEditor = () => {
             <Card className="backdrop-blur-lg bg-white/10 border-white/20 mb-4">
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-bold text-white">Smart Editor</h1>
+                  <h1 className="text-2xl font-bold text-white">Smart Text Editor</h1>
                   <Button
                     onClick={handleDownload}
-                    disabled={!uploadedImage}
+                    disabled={!uploadedImage || editableElements.length === 0}
                     className="bg-purple-600 hover:bg-purple-700"
                   >
                     <Download className="w-4 h-4 mr-2" />
@@ -262,7 +322,7 @@ const SmartImageEditor = () => {
                       onDrop={handleDrop}
                       onDragOver={handleDragOver}
                     >
-                      {/* Hidden canvas for manipulation */}
+                      {/* Hidden canvas for pixel manipulation */}
                       <canvas
                         ref={mainCanvasRef}
                         className="hidden"
@@ -277,50 +337,62 @@ const SmartImageEditor = () => {
                       />
                       
                       {/* Interactive overlays for detected elements */}
-                      {editableElements.map((element) => (
-                        <div
-                          key={element.id}
-                          className={`absolute border-2 transition-all duration-200 ${
-                            selectedElement === element.id 
-                              ? 'border-yellow-400 shadow-lg' 
-                              : element.isEditing
-                              ? 'border-green-400'
-                              : 'border-blue-400/60 hover:border-blue-400'
-                          }`}
-                          style={{
-                            left: `${element.bbox.x}px`,
-                            top: `${element.bbox.y}px`,
-                            width: `${element.bbox.width}px`,
-                            height: `${element.bbox.height}px`,
-                            cursor: element.isEditing ? 'text' : isDragging ? 'grabbing' : 'grab'
-                          }}
-                        >
-                          {element.isEditing && element.type === 'text' ? (
-                            <textarea
-                              value={element.content}
-                              onChange={(e) => updateElementContent(element.id, e.target.value)}
-                              onBlur={() => finishElementEdit(element.id)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                  e.preventDefault();
-                                  finishElementEdit(element.id);
-                                }
-                                if (e.key === 'Escape') {
-                                  finishElementEdit(element.id);
-                                }
-                              }}
-                              className="w-full h-full bg-white/90 text-black resize-none border-none outline-none p-1 text-sm"
-                              autoFocus
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-blue-500/10">
-                              <span className="text-xs text-white/80 px-1">
-                                {element.type === 'text' ? 'Text' : 'Object'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                      {editableElements.map((element) => {
+                        // Calculate display coordinates based on image scaling
+                        const img = imageRef.current;
+                        if (!img) return null;
+                        
+                        const scaleX = img.clientWidth / img.naturalWidth;
+                        const scaleY = img.clientHeight / img.naturalHeight;
+                        
+                        const displayX = element.bbox.x * scaleX;
+                        const displayY = element.bbox.y * scaleY;
+                        const displayWidth = element.bbox.width * scaleX;
+                        const displayHeight = element.bbox.height * scaleY;
+                        
+                        return (
+                          <div
+                            key={element.id}
+                            className={`absolute border-2 transition-all duration-200 ${
+                              selectedElement === element.id 
+                                ? 'border-yellow-400 shadow-lg' 
+                                : element.isEditing
+                                ? 'border-green-400'
+                                : 'border-blue-400/60 hover:border-blue-400'
+                            }`}
+                            style={{
+                              left: `${displayX}px`,
+                              top: `${displayY}px`,
+                              width: `${displayWidth}px`,
+                              height: `${displayHeight}px`,
+                              cursor: element.isEditing ? 'text' : isDragging ? 'grabbing' : 'grab'
+                            }}
+                          >
+                            {element.isEditing && element.type === 'text' ? (
+                              <textarea
+                                value={element.content}
+                                onChange={(e) => updateElementContent(element.id, e.target.value)}
+                                onBlur={() => finishElementEdit(element.id)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    finishElementEdit(element.id);
+                                  }
+                                  if (e.key === 'Escape') {
+                                    finishElementEdit(element.id);
+                                  }
+                                }}
+                                className="w-full h-full bg-white/90 text-black resize-none border-none outline-none p-1 text-sm font-mono"
+                                autoFocus
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center bg-blue-500/10 text-xs text-white/80 px-1 font-mono">
+                                {element.content.length > 10 ? element.content.substring(0, 10) + '...' : element.content}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <div 
@@ -330,7 +402,7 @@ const SmartImageEditor = () => {
                     >
                       <Upload className="w-24 h-24 mx-auto mb-6 opacity-50" />
                       <h3 className="text-xl font-semibold mb-2">Drop Image Here</h3>
-                      <p className="mb-4">Or click upload to select an image</p>
+                      <p className="mb-4">Upload an image with text to start editing</p>
                       <p className="text-sm">Supports JPG, PNG, GIF, WebP</p>
                     </div>
                   )}
