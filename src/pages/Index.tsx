@@ -1,8 +1,8 @@
 
-import ImageEditor from '@/components/ImageEditor';
+import AdvancedImageEditor from '@/components/AdvancedImageEditor';
 
 const Index = () => {
-  return <ImageEditor />;
+  return <AdvancedImageEditor />;
 };
 
 export default Index;
