@@ -1,7 +1,7 @@
-
 import { useState, useRef, useCallback } from 'react';
 import { useImageEditor } from './useImageEditor';
 import { useObjectDetection } from './useObjectDetection';
+import { toast } from 'sonner';
 
 interface EditingTool {
   type: 'brush' | 'eraser' | 'clone' | 'heal' | 'blur' | 'sharpen';

@@ -1,4 +1,3 @@
-
 import { useState, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -57,13 +56,17 @@ export const useImageEditor = () => {
 
   const saveImageToDatabase = async (originalUrl: string, filename: string, fileSize: number, mimeType: string) => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user');
+
       const { data, error } = await supabase
         .from('user_images')
         .insert({
           original_url: originalUrl,
           filename,
           file_size: fileSize,
-          mime_type: mimeType
+          mime_type: mimeType,
+          user_id: user.id
         })
         .select()
         .single();

@@ -1,6 +1,5 @@
-
 import React, { useCallback, useEffect } from 'react';
-import { Upload, Download, Scan, Brush, Eraser, Wand2, Blur, LogOut } from 'lucide-react';
+import { Upload, Download, Scan, Brush, Eraser, Wand2, Circle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
@@ -292,7 +291,7 @@ const AdvancedImageEditor = () => {
                       variant="outline"
                       className="bg-white/10 border-white/20 text-white hover:bg-white/20"
                     >
-                      <Blur className="w-4 h-4 mr-2" />
+                      <Circle className="w-4 h-4 mr-2" />
                       Blur
                     </Button>
                     <Button
