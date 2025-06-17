@@ -34,27 +34,25 @@ export const useOCRDetection = () => {
 
       console.log('OCR data structure:', data);
 
-      // Access words from the data structure - try different possible paths
+      // Access words from the correct Tesseract.js structure
       let allWords: any[] = [];
       
-      if (data.words && Array.isArray(data.words)) {
-        allWords = data.words;
-      } else if (data.paragraphs && Array.isArray(data.paragraphs)) {
-        allWords = data.paragraphs.flatMap((paragraph: any) => 
-          paragraph.lines?.flatMap((line: any) => line.words || []) || []
+      // Tesseract.js structure: data.blocks -> paragraphs -> lines -> words
+      if (data.blocks && Array.isArray(data.blocks)) {
+        allWords = data.blocks.flatMap((block: any) => 
+          block.paragraphs?.flatMap((paragraph: any) => 
+            paragraph.lines?.flatMap((line: any) => line.words || []) || []
+          ) || []
         );
-      } else if (data.lines && Array.isArray(data.lines)) {
-        allWords = data.lines.flatMap((line: any) => line.words || []);
-      } else {
-        // Fallback: try to extract from the text directly
-        const text = data.text || '';
-        if (text.trim()) {
-          allWords = [{
-            text: text,
-            confidence: 80,
-            bbox: { x0: 0, y0: 0, x1: 100, y1: 20 }
-          }];
-        }
+      }
+      
+      // Fallback: if no words found, create a single region from the full text
+      if (allWords.length === 0 && data.text && data.text.trim()) {
+        allWords = [{
+          text: data.text.trim(),
+          confidence: 80,
+          bbox: { x0: 0, y0: 0, x1: 100, y1: 20 }
+        }];
       }
 
       const textRegions: OCRTextRegion[] = allWords
