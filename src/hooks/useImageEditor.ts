@@ -32,15 +32,23 @@ export const useImageEditor = () => {
 
   const uploadImageToStorage = async (file: File): Promise<string | null> => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user');
+
       const fileExt = file.name.split('.').pop();
       const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `${fileName}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      console.log('Uploading to path:', filePath);
 
       const { error: uploadError } = await supabase.storage
         .from('images')
         .upload(filePath, file);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Upload error:', uploadError);
+        throw uploadError;
+      }
 
       const { data } = supabase.storage
         .from('images')
