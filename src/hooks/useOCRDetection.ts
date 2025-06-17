@@ -32,7 +32,12 @@ export const useOCRDetection = () => {
         logger: m => console.log(m)
       });
 
-      const textRegions: OCRTextRegion[] = data.words
+      // Access words through the paragraphs structure
+      const allWords = data.paragraphs.flatMap(paragraph => 
+        paragraph.lines.flatMap(line => line.words)
+      );
+
+      const textRegions: OCRTextRegion[] = allWords
         .filter(word => word.confidence > 30) // Filter out low confidence detections
         .map((word, index) => ({
           id: `ocr-${index}`,
