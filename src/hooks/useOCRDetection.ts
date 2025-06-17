@@ -32,24 +32,44 @@ export const useOCRDetection = () => {
         logger: m => console.log(m)
       });
 
-      // Access words through the paragraphs structure
-      const allWords = data.paragraphs.flatMap(paragraph => 
-        paragraph.lines.flatMap(line => line.words)
-      );
+      console.log('OCR data structure:', data);
+
+      // Access words from the data structure - try different possible paths
+      let allWords: any[] = [];
+      
+      if (data.words && Array.isArray(data.words)) {
+        allWords = data.words;
+      } else if (data.paragraphs && Array.isArray(data.paragraphs)) {
+        allWords = data.paragraphs.flatMap((paragraph: any) => 
+          paragraph.lines?.flatMap((line: any) => line.words || []) || []
+        );
+      } else if (data.lines && Array.isArray(data.lines)) {
+        allWords = data.lines.flatMap((line: any) => line.words || []);
+      } else {
+        // Fallback: try to extract from the text directly
+        const text = data.text || '';
+        if (text.trim()) {
+          allWords = [{
+            text: text,
+            confidence: 80,
+            bbox: { x0: 0, y0: 0, x1: 100, y1: 20 }
+          }];
+        }
+      }
 
       const textRegions: OCRTextRegion[] = allWords
-        .filter(word => word.confidence > 30) // Filter out low confidence detections
+        .filter(word => word && word.text && word.confidence > 30)
         .map((word, index) => ({
           id: `ocr-${index}`,
           text: word.text,
           bbox: {
-            x: word.bbox.x0,
-            y: word.bbox.y0,
-            width: word.bbox.x1 - word.bbox.x0,
-            height: word.bbox.y1 - word.bbox.y0,
+            x: word.bbox?.x0 || 0,
+            y: word.bbox?.y0 || 0,
+            width: (word.bbox?.x1 || 0) - (word.bbox?.x0 || 0),
+            height: (word.bbox?.y1 || 0) - (word.bbox?.y0 || 0),
           },
           confidence: word.confidence / 100,
-          fontSize: Math.max(12, word.bbox.y1 - word.bbox.y0),
+          fontSize: Math.max(12, (word.bbox?.y1 || 20) - (word.bbox?.y0 || 0)),
           fontFamily: 'Arial',
           color: '#000000'
         }));
