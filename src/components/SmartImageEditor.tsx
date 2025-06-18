@@ -1,12 +1,12 @@
-
 import React, { useCallback, useEffect } from 'react';
-import { Upload, Download, Scan, Type, Trash2, RotateCcw, Brush, Eraser } from 'lucide-react';
+import { Upload, Download, Scan, Type, Trash2, RotateCcw, Brush, Eraser, Sparkles, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { useRealImageEditor } from '@/hooks/useRealImageEditor';
+import { useGeminiAI } from '@/hooks/useGeminiAI';
 
 const SmartImageEditor = () => {
   const {
@@ -34,6 +34,8 @@ const SmartImageEditor = () => {
     exportEditedImage
   } = useRealImageEditor();
 
+  const { isLoading: isGeminiLoading, analyzeImage, generateEditInstructions } = useGeminiAI();
+
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Initialize working canvas when image is uploaded
@@ -50,6 +52,24 @@ const SmartImageEditor = () => {
       }
     }
   }, [uploadedImage]);
+
+  const handleGeminiAnalysis = useCallback(async () => {
+    if (!uploadedImage) {
+      toast.error('Please upload an image first');
+      return;
+    }
+
+    try {
+      const analysis = await analyzeImage(uploadedImage, 'text');
+      if (analysis) {
+        toast.success('AI Analysis Complete');
+        console.log('Gemini Analysis:', analysis);
+        // You can display the analysis in a modal or sidebar if needed
+      }
+    } catch (error) {
+      console.error('Error during Gemini analysis:', error);
+    }
+  }, [uploadedImage, analyzeImage]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!workingCanvasRef.current) return;
@@ -106,7 +126,7 @@ const SmartImageEditor = () => {
               <CardHeader>
                 <CardTitle className="text-white flex items-center gap-2">
                   <Upload className="w-5 h-5" />
-                  Real Image Editor
+                  AI Image Editor
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -120,14 +140,25 @@ const SmartImageEditor = () => {
                 </Button>
                 
                 {uploadedImage && (
-                  <Button
-                    onClick={runRealAnalysis}
-                    className="w-full bg-purple-600 hover:bg-purple-700"
-                    disabled={isAnalyzing}
-                  >
-                    <Scan className="w-4 h-4 mr-2" />
-                    {isAnalyzing ? 'Analyzing Real Pixels...' : 'Analyze Real Image'}
-                  </Button>
+                  <>
+                    <Button
+                      onClick={runRealAnalysis}
+                      className="w-full bg-purple-600 hover:bg-purple-700"
+                      disabled={isAnalyzing}
+                    >
+                      <Scan className="w-4 h-4 mr-2" />
+                      {isAnalyzing ? 'Analyzing Real Pixels...' : 'Analyze Real Image'}
+                    </Button>
+                    
+                    <Button
+                      onClick={handleGeminiAnalysis}
+                      className="w-full bg-green-600 hover:bg-green-700"
+                      disabled={isGeminiLoading}
+                    >
+                      <Brain className="w-4 h-4 mr-2" />
+                      {isGeminiLoading ? 'AI Analyzing...' : 'Gemini AI Analysis'}
+                    </Button>
+                  </>
                 )}
                 
                 <input
@@ -176,6 +207,7 @@ const SmartImageEditor = () => {
                       variant={currentTool === 'enhance' ? 'default' : 'outline'}
                       className="w-full"
                     >
+                      <Sparkles className="w-4 h-4 mr-2" />
                       Enhance
                     </Button>
                   </div>
@@ -270,7 +302,7 @@ const SmartImageEditor = () => {
             <Card className="backdrop-blur-lg bg-white/10 border-white/20 mb-4">
               <CardContent className="py-4">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-bold text-white">Real Pixel Editor</h1>
+                  <h1 className="text-2xl font-bold text-white">AI-Powered Image Editor</h1>
                   <Button
                     onClick={handleDownload}
                     disabled={!uploadedImage}
@@ -311,9 +343,9 @@ const SmartImageEditor = () => {
                   ) : (
                     <div className="text-center text-white/60 border-2 border-dashed border-white/30 rounded-lg p-12 w-full max-w-2xl">
                       <Upload className="w-24 h-24 mx-auto mb-6 opacity-50" />
-                      <h3 className="text-xl font-semibold mb-2">Upload Image for Real Editing</h3>
-                      <p className="mb-4">Upload an image to start real pixel-level editing</p>
-                      <p className="text-sm">Real OCR analysis • Actual pixel manipulation • True image editing</p>
+                      <h3 className="text-xl font-semibold mb-2">Upload Image for AI-Powered Editing</h3>
+                      <p className="mb-4">Upload an image to start real pixel-level editing with AI assistance</p>
+                      <p className="text-sm">Real OCR analysis • Gemini AI insights • Actual pixel manipulation • True image editing</p>
                     </div>
                   )}
                 </div>
