@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect } from 'react';
-import { Upload, Download, Scan, Type, Trash2, RotateCcw, Brush, Eraser, Sparkles, Brain } from 'lucide-react';
+
+import React, { useCallback, useEffect, useState } from 'react';
+import { Upload, Download, Scan, Type, Trash2, RotateCcw, Brush, Eraser, Sparkles, Brain, Move } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +8,15 @@ import { Slider } from '@/components/ui/slider';
 import { toast } from 'sonner';
 import { useRealImageEditor } from '@/hooks/useRealImageEditor';
 import { useGeminiAI } from '@/hooks/useGeminiAI';
+
+interface DetectedElement {
+  id: string;
+  text: string;
+  type: 'text' | 'logo' | 'object';
+  bbox: { x: number; y: number; width: number; height: number };
+  confidence: number;
+  isDragging?: boolean;
+}
 
 const SmartImageEditor = () => {
   const {
@@ -35,6 +45,10 @@ const SmartImageEditor = () => {
   } = useRealImageEditor();
 
   const { isLoading: isGeminiLoading, analyzeImage, generateEditInstructions } = useGeminiAI();
+  
+  const [geminiDetectedElements, setGeminiDetectedElements] = useState<DetectedElement[]>([]);
+  const [draggedElement, setDraggedElement] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -60,16 +74,133 @@ const SmartImageEditor = () => {
     }
 
     try {
-      const analysis = await analyzeImage(uploadedImage, 'text');
+      const prompt = `Analyze this image and identify all text, logos, and objects with their approximate positions. 
+      For each detected item, provide:
+      1. The text content (if it's text)
+      2. The type (text, logo, or object)
+      3. A brief description
+      4. Approximate position as percentage of image (top-left corner and dimensions)
+      
+      Format your response as a JSON array like this:
+      [
+        {
+          "text": "MH 5488",
+          "type": "text",
+          "description": "Flight number",
+          "position": { "x": 20, "y": 30, "width": 15, "height": 8 }
+        },
+        {
+          "text": "Malaysia Airlines",
+          "type": "logo",
+          "description": "Airline logo",
+          "position": { "x": 10, "y": 10, "width": 25, "height": 12 }
+        }
+      ]`;
+
+      const analysis = await analyzeImage(uploadedImage, 'general');
       if (analysis) {
-        toast.success('AI Analysis Complete');
-        console.log('Gemini Analysis:', analysis);
-        // You can display the analysis in a modal or sidebar if needed
+        try {
+          // Try to parse JSON from the analysis
+          const jsonMatch = analysis.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const parsedElements = JSON.parse(jsonMatch[0]);
+            
+            // Convert to our detected elements format
+            const detectedElements: DetectedElement[] = parsedElements.map((element: any, index: number) => ({
+              id: `gemini-${index}`,
+              text: element.text || element.description || `Item ${index + 1}`,
+              type: element.type || 'object',
+              bbox: {
+                x: (element.position?.x || 0) * (workingCanvasRef.current?.width || 800) / 100,
+                y: (element.position?.y || 0) * (workingCanvasRef.current?.height || 600) / 100,
+                width: (element.position?.width || 10) * (workingCanvasRef.current?.width || 800) / 100,
+                height: (element.position?.height || 5) * (workingCanvasRef.current?.height || 600) / 100
+              },
+              confidence: 0.9
+            }));
+
+            setGeminiDetectedElements(detectedElements);
+            toast.success(`Gemini AI detected ${detectedElements.length} elements!`);
+          } else {
+            // Fallback: create elements based on text analysis
+            const lines = analysis.split('\n').filter(line => line.trim());
+            const detectedElements: DetectedElement[] = lines.slice(0, 10).map((line, index) => ({
+              id: `gemini-text-${index}`,
+              text: line.trim(),
+              type: 'text' as const,
+              bbox: {
+                x: 50 + (index % 3) * 200,
+                y: 100 + Math.floor(index / 3) * 80,
+                width: 150,
+                height: 30
+              },
+              confidence: 0.85
+            }));
+
+            setGeminiDetectedElements(detectedElements);
+            toast.success(`Created ${detectedElements.length} text elements from analysis`);
+          }
+        } catch (parseError) {
+          console.error('Failed to parse Gemini response:', parseError);
+          toast.warning('Analysis completed, but could not parse structured data');
+        }
       }
     } catch (error) {
       console.error('Error during Gemini analysis:', error);
+      toast.error('Failed to analyze with Gemini AI');
     }
-  }, [uploadedImage, analyzeImage]);
+  }, [uploadedImage, analyzeImage, workingCanvasRef]);
+
+  const handleElementMouseDown = useCallback((e: React.MouseEvent, elementId: string) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const element = geminiDetectedElements.find(el => el.id === elementId);
+    if (!element) return;
+
+    setDraggedElement(elementId);
+    setDragOffset({
+      x: e.clientX - element.bbox.x,
+      y: e.clientY - element.bbox.y
+    });
+
+    setGeminiDetectedElements(prev => 
+      prev.map(el => 
+        el.id === elementId ? { ...el, isDragging: true } : el
+      )
+    );
+  }, [geminiDetectedElements]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!draggedElement || !workingCanvasRef.current) return;
+
+    const rect = workingCanvasRef.current.getBoundingClientRect();
+    const scaleX = workingCanvasRef.current.width / rect.width;
+    const scaleY = workingCanvasRef.current.height / rect.height;
+    
+    const x = (e.clientX - rect.left - dragOffset.x) * scaleX;
+    const y = (e.clientY - rect.top - dragOffset.y) * scaleY;
+
+    setGeminiDetectedElements(prev => 
+      prev.map(el => 
+        el.id === draggedElement 
+          ? { ...el, bbox: { ...el.bbox, x: Math.max(0, x), y: Math.max(0, y) } }
+          : el
+      )
+    );
+  }, [draggedElement, dragOffset]);
+
+  const handleMouseUp = useCallback(() => {
+    if (draggedElement) {
+      setGeminiDetectedElements(prev => 
+        prev.map(el => 
+          el.id === draggedElement ? { ...el, isDragging: false } : el
+        )
+      );
+      setDraggedElement(null);
+      setDragOffset({ x: 0, y: 0 });
+      toast.success('Element moved!');
+    }
+  }, [draggedElement]);
 
   const handleCanvasClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!workingCanvasRef.current) return;
@@ -156,7 +287,7 @@ const SmartImageEditor = () => {
                       disabled={isGeminiLoading}
                     >
                       <Brain className="w-4 h-4 mr-2" />
-                      {isGeminiLoading ? 'AI Analyzing...' : 'Gemini AI Analysis'}
+                      {isGeminiLoading ? 'AI Analyzing...' : 'AI Analyze'}
                     </Button>
                   </>
                 )}
@@ -237,12 +368,51 @@ const SmartImageEditor = () => {
               </Card>
             )}
 
-            {/* Detected Elements */}
+            {/* Gemini Detected Elements */}
+            {geminiDetectedElements.length > 0 && (
+              <Card className="backdrop-blur-lg bg-white/10 border-white/20 flex-1">
+                <CardHeader>
+                  <CardTitle className="text-white">
+                    Gemini AI Detected ({geminiDetectedElements.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 max-h-60 overflow-y-auto">
+                  {geminiDetectedElements.map((element) => (
+                    <div
+                      key={element.id}
+                      className={`p-3 rounded-lg border transition-all duration-200 cursor-move ${
+                        element.isDragging
+                          ? 'bg-white/30 border-white/50'
+                          : 'bg-white/5 border-white/20 hover:bg-white/10'
+                      }`}
+                      onMouseDown={(e) => handleElementMouseDown(e, element.id)}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-blue-500/20 text-blue-200">
+                            Gemini {element.type}
+                          </Badge>
+                          <Badge className="bg-green-500/20 text-green-200">
+                            {Math.round(element.confidence * 100)}%
+                          </Badge>
+                        </div>
+                        <Move className="w-4 h-4 text-white/60" />
+                      </div>
+                      <p className="text-white text-sm font-mono bg-black/20 p-2 rounded">
+                        "{element.text}"
+                      </p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Real OCR Detected Elements */}
             {editableElements.length > 0 && (
               <Card className="backdrop-blur-lg bg-white/10 border-white/20 flex-1">
                 <CardHeader>
                   <CardTitle className="text-white">
-                    Real Detected Text ({editableElements.length})
+                    Real OCR Detected ({editableElements.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2 max-h-60 overflow-y-auto">
@@ -257,8 +427,8 @@ const SmartImageEditor = () => {
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <Badge className="bg-green-500/20 text-green-200">
-                            Real Text
+                          <Badge className="bg-purple-500/20 text-purple-200">
+                            OCR Text
                           </Badge>
                           <Badge className="bg-blue-500/20 text-blue-200">
                             {Math.round(element.confidence * 100)}%
@@ -320,7 +490,12 @@ const SmartImageEditor = () => {
               <CardContent className="p-6 h-full">
                 <div className="h-full flex items-center justify-center">
                   {uploadedImage ? (
-                    <div className="relative max-w-full max-h-full">
+                    <div 
+                      className="relative max-w-full max-h-full"
+                      onMouseMove={handleMouseMove}
+                      onMouseUp={handleMouseUp}
+                      onMouseLeave={handleMouseUp}
+                    >
                       {/* Working canvas for real editing */}
                       <canvas
                         ref={workingCanvasRef}
@@ -328,9 +503,28 @@ const SmartImageEditor = () => {
                         onMouseDown={handleCanvasMouseDown}
                         onMouseMove={handleCanvasMouseMove}
                         onMouseUp={handleCanvasMouseUp}
-                        onMouseLeave={handleCanvasMouseUp}
                         onClick={handleCanvasClick}
                       />
+                      
+                      {/* Overlay detected elements */}
+                      {geminiDetectedElements.map((element) => (
+                        <div
+                          key={element.id}
+                          className={`absolute border-2 border-blue-400 bg-blue-400/20 pointer-events-none ${
+                            element.isDragging ? 'border-yellow-400 bg-yellow-400/30' : ''
+                          }`}
+                          style={{
+                            left: `${element.bbox.x / (workingCanvasRef.current?.width || 1) * 100}%`,
+                            top: `${element.bbox.y / (workingCanvasRef.current?.height || 1) * 100}%`,
+                            width: `${element.bbox.width / (workingCanvasRef.current?.width || 1) * 100}%`,
+                            height: `${element.bbox.height / (workingCanvasRef.current?.height || 1) * 100}%`
+                          }}
+                        >
+                          <div className="text-xs text-white bg-blue-600 px-1 rounded -mt-5">
+                            {element.text}
+                          </div>
+                        </div>
+                      ))}
                       
                       {/* Hidden reference image */}
                       <img
