@@ -42,25 +42,40 @@ export const useRealOCRDetection = () => {
 
       console.log('Raw OCR data:', data);
 
-      // Extract real text elements from actual image
+      // Extract real text elements from actual image using correct Tesseract.js structure
       const textElements: DetectedTextElement[] = [];
       
-      if (data.words && Array.isArray(data.words)) {
-        data.words.forEach((word, index) => {
-          if (word.text && word.text.trim().length > 0 && word.confidence > 60) {
-            const bbox = word.bbox;
-            textElements.push({
-              id: `real-text-${index}-${Date.now()}`,
-              text: word.text.trim(),
-              bbox: {
-                x: bbox.x0,
-                y: bbox.y0,
-                width: bbox.x1 - bbox.x0,
-                height: bbox.y1 - bbox.y0,
-              },
-              confidence: word.confidence / 100,
-              fontSize: Math.max(12, (bbox.y1 - bbox.y0) * 0.8),
-              color: getPixelColor(canvas, bbox.x0, bbox.y0)
+      // Access words through the correct hierarchy: blocks -> paragraphs -> lines -> words
+      if (data.blocks && Array.isArray(data.blocks)) {
+        let wordIndex = 0;
+        data.blocks.forEach((block) => {
+          if (block.paragraphs && Array.isArray(block.paragraphs)) {
+            block.paragraphs.forEach((paragraph) => {
+              if (paragraph.lines && Array.isArray(paragraph.lines)) {
+                paragraph.lines.forEach((line) => {
+                  if (line.words && Array.isArray(line.words)) {
+                    line.words.forEach((word) => {
+                      if (word.text && word.text.trim().length > 0 && word.confidence > 60) {
+                        const bbox = word.bbox;
+                        textElements.push({
+                          id: `real-text-${wordIndex}-${Date.now()}`,
+                          text: word.text.trim(),
+                          bbox: {
+                            x: bbox.x0,
+                            y: bbox.y0,
+                            width: bbox.x1 - bbox.x0,
+                            height: bbox.y1 - bbox.y0,
+                          },
+                          confidence: word.confidence / 100,
+                          fontSize: Math.max(12, (bbox.y1 - bbox.y0) * 0.8),
+                          color: getPixelColor(canvas, bbox.x0, bbox.y0)
+                        });
+                        wordIndex++;
+                      }
+                    });
+                  }
+                });
+              }
             });
           }
         });
