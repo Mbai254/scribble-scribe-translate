@@ -44,8 +44,26 @@ serve(async (req) => {
 
     // Add image if provided
     if (imageData) {
-      // Remove data URL prefix if present
-      const base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '')
+      let base64Data: string
+      
+      // Check if imageData is a URL (Supabase storage URL)
+      if (imageData.startsWith('http')) {
+        console.log('Fetching image from URL:', imageData)
+        
+        // Fetch the image from the URL
+        const imageResponse = await fetch(imageData)
+        if (!imageResponse.ok) {
+          throw new Error(`Failed to fetch image: ${imageResponse.status}`)
+        }
+        
+        // Convert to base64
+        const imageBuffer = await imageResponse.arrayBuffer()
+        const base64String = btoa(String.fromCharCode(...new Uint8Array(imageBuffer)))
+        base64Data = base64String
+      } else {
+        // Remove data URL prefix if present
+        base64Data = imageData.replace(/^data:image\/[a-z]+;base64,/, '')
+      }
       
       requestBody.contents[0].parts.push({
         inline_data: {
@@ -55,6 +73,7 @@ serve(async (req) => {
       })
     }
 
+    console.log('Sending request to Gemini API...')
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -95,6 +114,7 @@ serve(async (req) => {
     console.error('Error in gemini-ai function:', error)
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: error.message || 'An unexpected error occurred'
       }),
       { 
